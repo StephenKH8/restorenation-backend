@@ -2,6 +2,7 @@ import sqlite3
 import secrets
 import os
 import stripe
+import resend
 import traceback
 import random
 from datetime import datetime, timedelta, timezone
@@ -104,6 +105,7 @@ def request_login_code(req: EmailRequest):
 
     # For now we RETURN the code so we can test without email.
     # In Phase 3 this becomes an email send and we stop returning it.
+    send_login_email(req.email, code)
     return {"message": "Login code generated", "code_for_testing": code}
 
 
@@ -162,6 +164,33 @@ def check_subscription(req: TokenRequest):
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 stripe.api_key = STRIPE_API_KEY
+
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+resend.api_key = RESEND_API_KEY
+EMAIL_FROM = "RestoreNation <onboarding@resend.dev>"
+
+
+def send_login_email(to_email, code):
+    if not RESEND_API_KEY:
+        print("[email] RESEND_API_KEY not set; skipping send")
+        return False
+    try:
+        resend.Emails.send({
+            "from": EMAIL_FROM,
+            "to": [to_email],
+            "subject": "Your RestoreNation login code",
+            "html": (
+                "<p>Your RestoreNation login code is:</p>"
+                "<p style=\"font-size:28px;font-weight:bold;letter-spacing:4px;\">" + code + "</p>"
+                "<p>This code expires in 10 minutes. If you didn't request it, you can ignore this email.</p>"
+            ),
+        })
+        print("[email] sent login code to " + to_email)
+        return True
+    except Exception as e:
+        print("[email] send FAILED to " + to_email + ": " + str(e))
+        return False
+
 
 # Map each Stripe price ID to how long it grants access.
 # Fill these in during testing (Step 4) once we see the real price IDs.
