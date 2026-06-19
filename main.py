@@ -2,6 +2,7 @@ import sqlite3
 import secrets
 import os
 import stripe
+import traceback
 import random
 from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
@@ -217,43 +218,56 @@ async def stripe_webhook(request: Request):
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
-    # Verify the event really came from Stripe.
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, STRIPE_WEBHOOK_SECRET
         )
     except Exception as e:
+        print(f"[stripe] SIGNATURE verification failed: {e}")
         raise HTTPException(status_code=400, detail=f"Webhook verification failed: {e}")
 
-    etype = event["type"]
-    obj = event["data"]["object"]
+    try:
+        etype = event["type"]
+        # Convert the Stripe object to a plain dict so .get() works normally.
+        obj = dict(event["data"]["object"])
+        print(f"[stripe] received event: {etype}")
 
-    if etype == "checkout.session.completed":
-        email = (
-            obj.get("customer_details", {}).get("email")
-            or obj.get("customer_email")
-        )
-        # Figure out which plan they bought, to set the right duration.
-        days = DEFAULT_DURATION_DAYS
-        try:
-            line_items = stripe.checkout.Session.list_line_items(obj["id"], limit=1)
-            if line_items and line_items["data"]:
-                price_id = line_items["data"][0]["price"]["id"]
-                days = PRICE_DURATIONS.get(price_id, DEFAULT_DURATION_DAYS)
-                print(f"[stripe] checkout price_id={price_id} -> {days} days")
-        except Exception as e:
-            print(f"[stripe] Could not read line items: {e}")
+        if etype == "checkout.session.completed":
+            cust_details = obj.get("customer_details") or {}
+            if not isinstance(cust_details, dict):
+                cust_details = dict(cust_details)
+            email = cust_details.get("email") or obj.get("customer_email")
+            print(f"[stripe] checkout email resolved to: {email}")
 
-        if email:
-            _activate_user(email, days, obj.get("customer"))
+            days = DEFAULT_DURATION_DAYS
+            try:
+                session_id = obj.get("id")
+                line_items = stripe.checkout.Session.list_line_items(session_id, limit=1)
+                items = list(line_items.auto_paging_iter()) if hasattr(line_items, "auto_paging_iter") else line_items["data"]
+                if items:
+                    first = dict(items[0])
+                    price = dict(first.get("price") or {})
+                    price_id = price.get("id")
+                    days = PRICE_DURATIONS.get(price_id, DEFAULT_DURATION_DAYS)
+                    print(f"[stripe] price_id={price_id} -> {days} days")
+            except Exception as e:
+                print(f"[stripe] could not read line items (using default {days}d): {e}")
 
-    elif etype in ("customer.subscription.deleted", "invoice.payment_failed"):
-        customer_id = obj.get("customer")
-        if customer_id:
-            _deactivate_user_by_customer(customer_id)
+            if email:
+                _activate_user(email, days, obj.get("customer"))
+            else:
+                print("[stripe] no email on event; nothing activated")
 
-    else:
-        print(f"[stripe] Ignoring event type: {etype}")
+        elif etype in ("customer.subscription.deleted", "invoice.payment_failed"):
+            customer_id = obj.get("customer")
+            if customer_id:
+                _deactivate_user_by_customer(customer_id)
+
+        else:
+            print(f"[stripe] ignoring event type: {etype}")
+
+    except Exception:
+        print("[stripe] HANDLER ERROR (returning 200 so Stripe stops retrying):")
+        traceback.print_exc()
 
     return {"received": True}
-
