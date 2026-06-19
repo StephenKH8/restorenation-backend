@@ -199,7 +199,8 @@ def _deactivate_user_by_customer(stripe_customer_id):
     # We look the customer's email up from Stripe, then deactivate by email.
     try:
         cust = stripe.Customer.retrieve(stripe_customer_id)
-        email = cust.get("email")
+        cust_dict = cust.to_dict() if hasattr(cust, "to_dict") else cust
+        email = cust_dict.get("email")
     except Exception as e:
         print(f"[stripe] Could not retrieve customer {stripe_customer_id}: {e}")
         return
@@ -250,10 +251,10 @@ async def stripe_webhook(request: Request):
             try:
                 session_id = obj.get("id")
                 line_items = stripe.checkout.Session.list_line_items(session_id, limit=1)
-                items = list(line_items.auto_paging_iter()) if hasattr(line_items, "auto_paging_iter") else line_items["data"]
-                if items:
-                    first = dict(items[0])
-                    price = dict(first.get("price") or {})
+                li_dict = line_items.to_dict() if hasattr(line_items, "to_dict") else line_items
+                data = li_dict.get("data") or []
+                if data:
+                    price = (data[0] or {}).get("price") or {}
                     price_id = price.get("id")
                     days = PRICE_DURATIONS.get(price_id, DEFAULT_DURATION_DAYS)
                     print(f"[stripe] price_id={price_id} -> {days} days")
