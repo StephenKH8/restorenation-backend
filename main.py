@@ -229,7 +229,14 @@ async def stripe_webhook(request: Request):
     try:
         etype = event["type"]
         # Convert the Stripe object to a plain dict so .get() works normally.
-        obj = dict(event["data"]["object"])
+        raw_obj = event["data"]["object"]
+        # Stripe objects -> plain nested dict (the correct, supported way)
+        if hasattr(raw_obj, "to_dict_recursive"):
+            obj = raw_obj.to_dict_recursive()
+        elif hasattr(raw_obj, "to_dict"):
+            obj = raw_obj.to_dict()
+        else:
+            obj = dict(raw_obj)
         print(f"[stripe] received event: {etype}")
 
         if etype == "checkout.session.completed":
