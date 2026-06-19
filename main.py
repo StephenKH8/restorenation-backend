@@ -105,8 +105,8 @@ def request_login_code(req: EmailRequest):
 
     # For now we RETURN the code so we can test without email.
     # In Phase 3 this becomes an email send and we stop returning it.
-    send_login_email(req.email, code)
-    return {"message": "Login code generated", "code_for_testing": code}
+    sent = send_login_email(req.email, code)
+    return {"message": "Login code sent", "email_sent": sent}
 
 
 @app.post("/verify-code")
