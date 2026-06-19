@@ -167,9 +167,9 @@ stripe.api_key = STRIPE_API_KEY
 # Fill these in during testing (Step 4) once we see the real price IDs.
 # Keys are Stripe price IDs (look like "price_1AbC..."); values are days of access.
 PRICE_DURATIONS = {
-    # "price_xxx_monthly": 31,
-    # "price_xxx_sixmonth": 184,
-    # "price_xxx_annual": 366,
+    "price_1TjPAXRs7Dym1YeRCsTgtXQW": 31,   # Monthly  ($19.99/mo)
+    "price_1TjPBbRs7Dym1YeRmq9Ua5TE": 190,  # 6-Months ($119.99/6mo)
+    "price_1TjPCyRs7Dym1YeRUy1j6CjL": 370,  # 1 Year   ($199.99/yr)
 }
 DEFAULT_DURATION_DAYS = 31  # fallback if a price ID isn't in the map yet
 
