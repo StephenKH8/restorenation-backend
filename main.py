@@ -9,9 +9,18 @@ from datetime import datetime, timedelta, timezone
 from contextlib import contextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # tighten to the real app origin at go-live
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 DB_PATH = "users.db"
 
