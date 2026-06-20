@@ -317,3 +317,23 @@ async def stripe_webhook(request: Request):
         traceback.print_exc()
 
     return {"received": True}
+
+
+@app.post("/admin-activate")
+def admin_activate(req: dict):
+    """TEMPORARY testing helper — activates an email. Remove before launch."""
+    secret = os.environ.get("ADMIN_SECRET", "")
+    if not secret or req.get("secret") != secret:
+        raise HTTPException(status_code=403, detail="forbidden")
+    email = req.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="email required")
+    valid_until = now_utc() + timedelta(days=370)
+    with get_db() as conn:
+        existing = conn.execute("SELECT email FROM users WHERE email = ?", (email,)).fetchone()
+        if existing:
+            conn.execute("UPDATE users SET subscription_status='active', valid_until=? WHERE email=?", (iso(valid_until), email))
+        else:
+            conn.execute("INSERT INTO users (email, subscription_status, valid_until) VALUES (?, 'active', ?)", (email, iso(valid_until)))
+    return {"activated": email, "valid_until": iso(valid_until)}
+
